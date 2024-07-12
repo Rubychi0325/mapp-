@@ -1,165 +1,283 @@
 <template>
-  <div class="app">
-    <!-- 點位顯示區域 -->
-    <div class="point-container">
-      <div v-for="point in points" :key="point.id" 
-           class="point" 
-           :style="{ top: point.y + 'px', left: point.x + 'px' }" 
-           @click="selectPoint(point)">
-      </div>
+  <div>
+    <div>
+      <label>選擇繪圖模式：</label>
+      <button :class="{ active: currentMode === 'drawPoint' }" @click="setCurrentMode('drawPoint')">點</button>
+      <button :class="{ active: currentMode === 'drawPath' }" @click="setCurrentMode('drawPath')">點路徑</button>
+      <button :class="{ active: currentMode === 'clickMode' }" @click="setCurrentMode('clickMode')">點選</button>
+      <button :class="{ active: currentMode === 'Dragdrop' }" @click="setCurrentMode('Dragdrop')">拖曳點</button>
+      <button :class="{ active: currentMode === 'continuousdraw' }" @click="setCurrentMode('continuousdraw')">連續繪圖</button>
     </div>
-    
-    <!-- 點位資訊表格區域 -->
-    <div v-if="selectedPoint" class="info-table">
+
+    <canvas ref="canvas" width="600" height="400"
+            @click="handleCanvasClick"
+            style="border:1px solid #000;">
+      Your browser does not support the HTML5 canvas tag.
+    </canvas>
+
+    <div v-if="isDragging && draggedPoint" style="position: absolute; background: rgba(255, 255, 255, 0.7); padding: 5px; border-radius: 5px;">
+      <strong>坐標:</strong> ({{ draggedPoint.x.toFixed(2) }}, {{ draggedPoint.y.toFixed(2) }})
+    </div>
+
+    <div v-if="currentMode === 'drawPoint' && addingPoint">
       <table>
-        <tr>
-          <td>Tag_ID</td>
-          <td><input v-model="formData.Tag_ID" type="text"/></td>
+        <tr style="background-color: #0E356E;">
+          <td colspan="2" style="color: white; text-align: center; padding: 10px; border-radius: 8px; font-weight: bold; font-size: 18px;">新增點</td>
         </tr>
         <tr>
-          <td>Tag_Name</td>
-          <td><input v-model="formData.Tag_Name" type="text"/></td>
+          <td><label for="tag-id">Tag_ID</label></td>
+          <td><input type="text" id="tag-id" v-model="newPoint.tagID"></td>
         </tr>
         <tr>
-          <td>X</td>
-          <td><input v-model="formData.X" type="text"/></td>
+          <td><label for="tag-name">Tag_Name</label></td>
+          <td><input type="text" id="tag-name" v-model="newPoint.tagName"></td>
         </tr>
         <tr>
-          <td>Y</td>
-          <td><input v-model="formData.Y" type="text"/></td>
+          <td><label for="x-coordinate">X 座標</label></td>
+          <td><input type="number" id="x-coordinate" v-model.number="newPoint.x"></td>
         </tr>
         <tr>
-          <td>樓層</td>
-          <td><input v-model="formData.樓層" type="text"/></td>
+          <td><label for="y-coordinate">Y 座標</label></td>
+          <td><input type="number" id="y-coordinate" v-model.number="newPoint.y"></td>
         </tr>
         <tr>
-          <td>樓層編號</td>
-          <td><input v-model="formData.樓層編號" type="text"/></td>
-        </tr>
-        <tr>
-          <td>MFG_tag</td>
-          <td><input v-model="formData.MFG_tag" type="text"/></td>
-        </tr>
-        <tr>
-          <td>端點架台類型</td>
-          <td><input v-model="formData.端點架台類型" type="text"/></td>
-        </tr>
-        <tr>
-          <td>虛擬點位</td>
-          <td><input v-model="formData.虛擬點位" type="text"/></td>
+          <td><button @click="cancelAddPoint">取消</button></td>
+          <td><button @click="confirmAddPoint">確認新增</button></td>
         </tr>
       </table>
-      <div class="buttons">
-        <button @click="cancelEdit">取消</button>
-        <button @click="updatePoint">修改</button>
-        <button @click="deletePoint">刪除</button>
-      </div>
+    </div>
+
+    <div v-if="selectedPoint" style="margin-top: 10px;">
+      <table>
+        <tr style="background-color: #0E356E;">
+          <td colspan="2" style="color: white; text-align: center; padding: 10px; border-radius: 8px; font-weight: bold; font-size: 18px;">點資訊</td>
+        </tr>
+        <tr>
+          <td><strong>Tag_ID</strong></td>
+          <td>
+            <input type="text" v-model="selectedPoint.tagID" :disabled="!isEditingPoint">
+          </td>
+        </tr>
+        <tr>
+          <td><strong>X 座標</strong></td>
+          <td>
+            <input type="number" v-model.number="selectedPoint.x" :disabled="!isEditingPoint">
+          </td>
+        </tr>
+        <tr>
+          <td><strong>Y 座標</strong></td>
+          <td>
+            <input type="number" v-model.number="selectedPoint.y" :disabled="!isEditingPoint">
+          </td>
+        </tr>
+        <tr>
+          <td colspan="2">
+            <button @click="cancelPointEdit(selectedPoint)" v-if="isEditingPoint">取消修改</button>
+            <button @click="confirmPointEdit" v-if="isEditingPoint">確認修改</button>
+            <button @click="enablePointEdit(selectedPoint)" v-if="!isEditingPoint">修改點</button>
+            <button @click="deletePoint(selectedPoint)">刪除點</button>
+          </td>
+        </tr>
+      </table>
     </div>
   </div>
 </template>
 
 <script>
 export default {
-  name: 'MapWeeb',
+  name: 'MapFunction',
   data() {
     return {
-      points: [
-        { id: 1, x: 100, y: 150, Tag_ID: 'T1', Tag_Name: '點位1', X: 100, Y: 150, 樓層: '1F', 樓層編號: '1', MFG_tag: 'MFG1', 端點架台類型: '類型1', 虛擬點位: '虛擬1' },
-        { id: 2, x: 200, y: 250, Tag_ID: 'T2', Tag_Name: '點位2', X: 200, Y: 250, 樓層: '2F', 樓層編號: '2', MFG_tag: 'MFG2', 端點架台類型: '類型2', 虛擬點位: '虛擬2' },
-        { id: 3, x: 300, y: 350, Tag_ID: 'T3', Tag_Name: '點位3', X: 300, Y: 350, 樓層: '3F', 樓層編號: '3', MFG_tag: 'MFG3', 端點架台類型: '類型3', 虛擬點位: '虛擬3' },
-      ],
+      context: null,
+      currentMode: 'drawPoint',
+      points: [],
       selectedPoint: null,
-      formData: {
-        Tag_ID: '',
-        Tag_Name: '',
-        X: '',
-        Y: '',
-        樓層: '',
-        樓層編號: '',
-        MFG_tag: '',
-        端點架台類型: '',
-        虛擬點位: ''
-      }
-    }
+      addingPoint: false,
+      newPoint: {
+        x: 0,
+        y: 0,
+        tagID: '',
+        tagName: ''
+      },
+      isDragging: false,
+      draggedPoint: null,
+      offsetX: 0,
+      offsetY: 0,
+      originalPosition: null, // 儲存原始位置
+    };
+  },
+  mounted() {
+    this.context = this.$refs.canvas.getContext('2d');
+    this.$refs.canvas.addEventListener('mousemove', this.handleMouseMove);
+    this.$refs.canvas.addEventListener('mouseup', this.handleMouseUp);
   },
   methods: {
-    selectPoint(point) {
-      this.selectedPoint = point;
-      this.formData = { ...point };
+    setCurrentMode(mode) {
+      this.currentMode = mode;
+      this.addingPoint = mode === 'drawPoint';
     },
-    cancelEdit() {
-      this.selectedPoint = null;
-    },
-    updatePoint() {
-      if (this.selectedPoint) {
-        Object.assign(this.selectedPoint, this.formData);
-        this.cancelEdit();
+    handleCanvasClick(event) {
+      const mouseX = event.offsetX;
+      const mouseY = event.offsetY;
+
+      if (this.currentMode === 'drawPoint') {
+        this.newPoint.x = mouseX;
+        this.newPoint.y = mouseY;
+        this.addingPoint = true;
+      } else if (this.currentMode === 'clickMode') {
+        this.showPointInfo(mouseX, mouseY);
+      } else if (this.currentMode === 'Dragdrop') {
+        this.points.forEach(point => {
+          if (Math.abs(point.x - mouseX) <= 3 && Math.abs(point.y - mouseY) <= 3 && !this.isDragging) {
+            this.isDragging = true;
+            this.draggedPoint = point;
+            this.originalPosition = { x: point.x, y: point.y }; // 記錄原始位置
+            this.offsetX = mouseX - point.x;
+            this.offsetY = mouseY - point.y;
+          }
+        });
       }
     },
-    deletePoint() {
-      if (this.selectedPoint) {
-        this.points = this.points.filter(point => point.id !== this.selectedPoint.id);
-        this.cancelEdit();
+    handleMouseMove(event) {
+      if (this.isDragging && this.draggedPoint) {
+        const mouseX = event.offsetX;
+        const mouseY = event.offsetY;
+
+        // 更新被拖曳點的座標
+        this.draggedPoint.x = mouseX - this.offsetX;
+        this.draggedPoint.y = mouseY - this.offsetY;
+
+        this.clearCanvas();
+        this.redrawPoints();
       }
+    },
+handleMouseUp(event) {
+  if (event.button === 0) {
+    // 當用戶放開滑鼠時，彈出確認對話框
+    if (this.isDragging) {
+      const confirmPlace = confirm("是否要將點放置在此?");
+      if (confirmPlace) {
+        // 確認放置，結束拖曳
+        this.isDragging = false; // 結束拖曳
+        this.originalPosition = null; // 清空原始位置
+        // 不需要在這裡更新 draggedPoint，因為它已經在 handleMouseMove 中更新過了
+      } else {
+        // 取消放置，恢復原始位置
+        if (this.draggedPoint && this.originalPosition) {
+          this.draggedPoint.x = this.originalPosition.x;
+          this.draggedPoint.y = this.originalPosition.y;
+          this.clearCanvas();
+          this.redrawPoints();
+        }
+      }
+      // 確保清空拖曳的點
+      this.isDragging = false;
+      this.draggedPoint = null; 
     }
   }
 }
+,
+
+
+    confirmAddPoint() {
+      this.points.push({
+        x: this.newPoint.x,
+        y: this.newPoint.y,
+        tagID: this.newPoint.tagID,
+        tagName: this.newPoint.tagName
+      });
+
+      this.drawPoint(this.newPoint.x, this.newPoint.y);
+      this.resetNewPoint();
+    },
+    
+    cancelAddPoint() {
+      this.resetNewPoint();
+    },
+    resetNewPoint() {
+      this.newPoint.x = 0;
+      this.newPoint.y = 0;
+      this.newPoint.tagID = '';
+      this.newPoint.tagName = '';
+      this.addingPoint = false;
+    },
+    drawPoint(x, y, color = 'blue') {
+      this.context.beginPath();
+      this.context.arc(x, y, 3, 0, Math.PI * 2);
+      this.context.fillStyle = color;
+      this.context.fill();
+
+      const tagID = this.points.find(point => point.x === x && point.y === y)?.tagID;
+      if (tagID) {
+        this.context.font = '12px Arial';
+        this.context.fillStyle = 'black';
+        this.context.fillText(`${tagID}`, x + 5, y - 5);
+      }
+    },
+    showPointInfo(mouseX, mouseY) {
+      for (const point of this.points) {
+        if (Math.abs(point.x - mouseX) <= 3 && Math.abs(point.y - mouseY) <= 3) {
+          this.selectedPoint = point;
+          return;
+        }
+      }
+      this.selectedPoint = null;
+    },
+    clearCanvas() {
+      this.context.clearRect(0, 0, this.$refs.canvas.width, this.$refs.canvas.height);
+    },
+    redrawPoints() {
+      for (const point of this.points) {
+        this.drawPoint(point.x, point.y);
+      }
+    },
+    deletePoint(pointToDelete) {
+      this.points = this.points.filter(point => point !== pointToDelete);
+      this.selectedPoint = null;
+      this.clearCanvas();
+      this.redrawPoints();
+    },
+  }
+};
 </script>
 
 <style scoped>
-.app {
-  display: flex;
-  justify-content: center; /* 將內容水平置中 */
-  align-items: center; /* 將內容垂直置中 */
-  position: relative; /* 加上相對定位，以便設置子元素的絕對定位 */
-}
-
-.point-container {
-  position: relative;
-  width: 500px;
-  height: 500px;
-  border: 1px solid #ccc;
-}
-
-.point {
-  position: absolute;
-  width: 10px;
-  height: 10px;
-  background-color: red;
-  border-radius: 50%;
+button {
+  padding: 5px 10px;
+  margin: 0 5px;
   cursor: pointer;
-}
-
-.info-table {
-  position: absolute;
-  left: 410px; /* 調整表格位置，使其顯示在畫布的右側 */
-  top: 0;
-  width: 250px; /* 調整表格寬度 */
-  padding: 10px;
   border: 1px solid #ccc;
-  background-color: #f9f9f9;
+  background-color: #f0f0f0;
 }
 
-.info-table table {
-  width: 100%;
+button.active {
+  background-color: #e0e0e0;
+}
+
+canvas {
+  border: 1px solid #000;
+}
+
+table {
+  margin-top: 10px;
   border-collapse: collapse;
 }
 
-.info-table td {
-  padding: 8px;
+table, th, td {
   border: 1px solid #ddd;
 }
 
-.info-table input {
-  width: calc(100% - 20px);
+th, td {
+  padding: 5px;
+  text-align: left;
 }
 
-.buttons {
-  margin-top: 10px;
+ul {
+  list-style-type: none;
+  padding: 0;
 }
 
-.buttons button {
-  margin-right: 5px;
+li {
+  margin-bottom: 10px;
 }
 </style>
-

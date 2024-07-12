@@ -6,6 +6,7 @@
       <button :class="{ active: currentMode === 'drawPoint' }" @click="setCurrentMode('drawPoint')">點</button>
       <button :class="{ active: currentMode === 'drawPath' }" @click="setCurrentMode('drawPath')">點路徑</button>
       <button :class="{ active: currentMode === 'clickMode' }" @click="setCurrentMode('clickMode')">點選</button>
+      <button :class="{ active: currentMode === 'continuousdraw' }" @click="setCurrentMode('continuousdraw')">連續繪圖</button>
     </div>
 
     <!-- Canvas -->
@@ -17,80 +18,137 @@
 
     <!-- Input point info -->
     <div v-if="currentMode === 'drawPoint' && addingPoint">
-      <h2>新增點</h2>
-      <label for="tag-id">Tag_ID：</label>
-      <input type="text" id="tag-id" v-model="newPoint.tagID"><br>
-
-      <label for="tag-name">Tag_Name：</label>
-      <input type="text" id="tag-name" v-model="newPoint.tagName"><br>
-
-      <label for="x-coordinate">X 座標：</label>
-      <input type="number" id="x-coordinate" v-model.number="newPoint.x"><br>
-
-      <label for="y-coordinate">Y 座標：</label>
-      <input type="number" id="y-coordinate" v-model.number="newPoint.y"><br>
-
-      <button @click="confirmAddPoint">確認新增</button>
-      <button @click="cancelAddPoint">取消</button>
+      <table>
+        <tr style="background-color: #0E356E;">
+          <td colspan="2" style="color: white; text-align: center; padding: 10px; border-radius: 8px; font-weight: bold; font-size: 18px;">新增點</td>
+        </tr>
+        <tr>
+          <td><label for="tag-id">Tag_ID</label></td>
+          <td><input type="text" id="tag-id" v-model="newPoint.tagID"></td>
+        </tr>
+        <tr>
+          <td><label for="tag-name">Tag_Name</label></td>
+          <td><input type="text" id="tag-name" v-model="newPoint.tagName"></td>
+        </tr>
+        <tr>
+          <td><label for="x-coordinate">X 座標</label></td>
+          <td><input type="number" id="x-coordinate" v-model.number="newPoint.x"></td>
+        </tr>
+        <tr>
+          <td><label for="y-coordinate">Y 座標</label></td>
+          <td><input type="number" id="y-coordinate" v-model.number="newPoint.y"></td>
+        </tr>
+        <tr>
+          <td><button @click="cancelAddPoint">取消</button></td>
+          <td><button @click="confirmAddPoint">確認新增</button></td>
+        </tr>
+      </table>
     </div>
 
     <!-- Input path info -->
     <div v-if="currentMode === 'drawPath' && pathPoints.length === 2">
-      <h2>新增路徑</h2>
       <table>
-        <tr>
-          <th>起點資訊</th>
-          <th>終點資訊</th>
+        <tr style="background-color: #0E356E;">
+          <td colspan="2" style="color: white; text-align: center; padding: 10px; border-radius: 8px; font-weight: bold; font-size: 18px;">新增路徑</td>
         </tr>
         <tr>
-          <td>
-            <p><strong>Tag_ID:</strong> {{ pathPoints[0].tagID }}</p>
-            <p><strong>起點坐標:</strong> ({{ pathPoints[0].x }}, {{ pathPoints[0].y }})</p>
-          </td>
-          <td>
-            <p><strong>Tag_ID:</strong> {{ pathPoints[1].tagID }}</p>
-            <p><strong>終點坐標:</strong> ({{ pathPoints[1].x }}, {{ pathPoints[1].y }})</p>
-          </td>
+          <td><strong>起點Tag_ID</strong></td>
+          <td>{{ pathPoints[0].tagID }}</td>
+        </tr>
+        <tr>
+          <td><strong>起點坐標</strong></td>
+          <td>({{ pathPoints[0].x }}, {{ pathPoints[0].y }})</td>
+        </tr>
+        <tr>
+          <td><strong>終點Tag_ID</strong></td>
+          <td>{{ pathPoints[1].tagID }}</td>
+        </tr>
+        <tr>
+          <td><strong>終點坐標</strong></td>
+          <td>({{ pathPoints[1].x }}, {{ pathPoints[1].y }})</td>
+        </tr>
+        <tr>
+          <td><label for="path-speed">路徑速度</label></td>
+          <td><input type="number" id="path-speed" v-model.number="newPath.speed" min="0" step="0.1"></td>
+        </tr>
+        <tr>
+          <td><button @click="cancelAddPath">取消</button></td>
+          <td><button @click="confirmAddPath">確認新增</button></td>
         </tr>
       </table>
-      <label for="path-speed">路徑速度：</label>
-      <input type="number" id="path-speed" v-model.number="newPath.speed" min="0" step="0.1"><br>
-
-      <button @click="confirmAddPath">確認新增</button>
-      <button @click="cancelAddPath">取消</button>
     </div>
 
     <!-- Display point and path info -->
     <div v-if="selectedPoint || selectedPath" style="margin-top: 10px;">
       <div v-if="selectedPoint">
-        <h2>點資訊</h2>
-        <p><strong>Tag_ID:</strong> {{ selectedPoint.tagID }}</p>
-        <p><strong>X 座標:</strong> {{ selectedPoint.x }}</p>
-        <p><strong>Y 座標:</strong> {{ selectedPoint.y }}</p>
-        <h3>相關路徑</h3>
-        <ul>
-          <li v-for="path in getRelatedPaths(selectedPoint)" :key="`${path.start.tagID}-${path.end.tagID}`">
-            <p><strong>起點 Tag_ID:</strong> {{ path.start.tagID }}</p>
-            <p><strong>終點 Tag_ID:</strong> {{ path.end.tagID }}</p>
-            <p><strong>起點坐標:</strong> ({{ path.start.x }}, {{ path.start.y }})</p>
-            <p><strong>終點坐標:</strong> ({{ path.end.x }}, {{ path.end.y }})</p>
-            <p><strong>路徑速度:</strong> {{ path.speed }}</p>
-            <button @click="deletePath(path)">刪除路徑</button>
-          </li>
+        <table>
+          <tr style="background-color: #0E356E;">
+            <td colspan="2" style="color: white; text-align: center; padding: 10px; border-radius: 8px; font-weight: bold; font-size: 18px;">點資訊</td>
+          </tr>
+          <tr>
+            <td><strong>Tag_ID</strong></td>
+            <td>
+              <input type="text" v-model="selectedPoint.tagID" :disabled="!isEditingPoint">
+            </td>
+          </tr>
+          <tr>
+            <td><strong>X 座標</strong></td>
+            <td>
+              <input type="number" v-model.number="selectedPoint.x" :disabled="!isEditingPoint">
+            </td>
+          </tr>
+          <tr>
+            <td><strong>Y 座標</strong></td>
+            <td>
+              <input type="number" v-model.number="selectedPoint.y" :disabled="!isEditingPoint">
+            </td>
+          </tr>
+          
+          <tr>
+            <td colspan="2">
+              <button @click="cancelPointEdit(selectedPoint)" v-if="isEditingPoint">取消修改</button>
+              <button @click="confirmPointEdit" v-if="isEditingPoint">確認修改</button>
+              <button @click="enablePointEdit(selectedPoint)" v-if="!isEditingPoint">修改點</button>
+              <button @click="deletePoint(selectedPoint)">刪除點</button>
+            </td>
+          </tr>
+        </table>
+        <ul v-if="selectedPoint">
+        <li v-for="path in getRelatedPaths(selectedPoint)" :key="`${path.start.tagID}-${path.end.tagID}`">
+          <table>
+            <tr style="background-color: #0E356E;">
+              <td colspan="2" style="color: white; text-align: center; padding: 10px; border-radius: 8px; font-weight: bold; font-size: 18px;">路徑資訊</td>
+            </tr>
+            <tr>
+              <td><strong>起點 Tag_ID</strong></td>
+              <td><input type="text" v-model="path.start.tagID" disabled></td>
+            </tr>
+            <tr>
+              <td><strong>終點 Tag_ID</strong></td>
+              <td><input type="text" v-model="path.end.tagID" disabled></td>
+            </tr>
+            <tr>
+              <td><strong>起點坐標</strong></td>
+              <td>({{ path.start.x }}, {{ path.start.y }})</td>
+            </tr>
+            <tr>
+              <td><strong>終點坐標</strong></td>
+              <td>({{ path.end.x }}, {{ path.end.y }})</td>
+            </tr>
+            <tr>
+              <td><strong>路徑速度</strong></td>
+              <td><input type="number" v-model.number="path.speed" disabled></td>
+            </tr>
+            <tr>
+              <td colspan="2">
+                <button @click="cancelEdit(path)">取消修改</button>
+                <button @click="enablePathEdit(path)">修改路徑</button>
+                <button @click="deletePath(path)">刪除路徑</button>
+              </td>
+            </tr>
+          </table>
+        </li>
         </ul>
-        <!-- 刪除點按鈕 -->
-        <button @click="deletePoint(selectedPoint)">刪除點</button>
-      </div>
-
-      <div v-if="selectedPath">
-        <h2>路徑資訊</h2>
-        <p><strong>起點 Tag_ID:</strong> {{ selectedPath.start.tagID }}</p>
-        <p><strong>終點 Tag_ID:</strong> {{ selectedPath.end.tagID }}</p>
-        <p><strong>起點坐標:</strong> ({{ selectedPath.start.x }}, {{ selectedPath.start.y }})</p>
-        <p><strong>終點坐標:</strong> ({{ selectedPath.end.x }}, {{ selectedPath.end.y }})</p>
-        <p><strong>路徑速度:</strong> {{ selectedPath.speed }}</p>
-        <!-- 刪除路徑按鈕 -->
-        <button @click="deletePath(selectedPath)">刪除路徑</button>
       </div>
     </div>
   </div>
@@ -102,24 +160,28 @@ export default {
   data() {
     return {
       context: null,
-      currentMode: 'drawPoint',  // Default mode is drawing points
-      points: [],  // Array to store clicked points
-      selectedPoint: null,  // Store the selected point for displaying info
-      addingPoint: false,  // Flag to indicate if adding a new point
+      currentMode: 'drawPoint',
+      points: [],
+      selectedPoint: null,
+      addingPoint: false,
       newPoint: {
         x: 0,
         y: 0,
         tagID: '',
         tagName: ''
       },
-      pathPoints: [],  // Array to store points for drawing paths
+      pathPoints: [],
       newPath: {
         endX: 0,
         endY: 0,
         speed: 0
       },
-      paths: [],  // Array to store paths
-      selectedPath: null  // Store the selected path for displaying info
+      paths: [],
+      selectedPath: null,
+      isEditingPoint: false,
+      isEditingPath: false,
+      originalPoint: {},
+      originalPath: {},
     };
   },
   mounted() {
@@ -349,7 +411,39 @@ export default {
       this.context.moveTo(x1, y1);
       this.context.lineTo(x2, y2);
       this.context.stroke();
-    }
+    },
+    enablePointEdit(point) {
+      // Set editing state to true and store original point data
+      this.isEditingPoint = true;
+      this.originalPoint = { ...point }; // Clone original point for cancellation
+    },
+    confirmPointEdit() {
+      // When confirming, update the point and exit editing mode
+      this.isEditingPoint = false;
+      this.originalPoint = {}; // Clear original data
+      this.clearCanvas();
+      this.redrawPoints();
+      this.redrawPaths();
+    },
+    cancelPointEdit(point) {
+      // Revert to original point data if editing is canceled
+      const index = this.points.findIndex(p => p.x === point.x && p.y === point.y);
+      if (index !== -1) {
+        // Restore original point values
+        this.points[index].x = this.originalPoint.x;
+        this.points[index].y = this.originalPoint.y;
+        this.points[index].tagID = this.originalPoint.tagID;
+        this.points[index].tagName = this.originalPoint.tagName;
+      }
+      this.isEditingPoint = false;
+      this.originalPoint = {}; // Clear original data
+
+      // Clear canvas and redraw all points and paths
+      this.clearCanvas();
+      this.redrawPoints();
+      this.redrawPaths();
+    },
+
   }
 };
 </script>
