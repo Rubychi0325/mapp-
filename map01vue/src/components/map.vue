@@ -167,7 +167,7 @@ export default {
 
 .custom-table tr:first-child td {
   border-bottom: none;
-  padding-top: 0; /* Remove top padding specifically for the first row */
+  padding-top: 0;
 }
 
 .custom-table input {
@@ -180,7 +180,7 @@ export default {
 }
 
 .btn {
-  padding: 8px 15px;
+  padding: 6px 14px;
   margin: 0 10px;
   font-size: 16px;
   font-weight: bold;
