@@ -177,13 +177,18 @@
 
     <div v-if="isConfirmingDelete" class="confirmation-dialog">
       <p>{{ deleteType === 'point' ? '是否要刪除此點？ (相關路徑也會跟著刪除喔！)' : '是否要刪除此路徑？' }}</p>
-      <button @click="confirmDelete">確認</button>
       <button @click="cancelDelete">取消</button>
+      <button @click="confirmDelete">確認</button>
     </div>
     <div v-if="isConfirmingPointEdit" class="confirmation-dialog">
       <p>是否要將點移動到新位置？</p>
-      <button @click="confirmPointMove">確認</button>
       <button @click="cancelPointMove">取消</button>
+      <button @click="confirmPointMove">確認</button>
+    </div>
+    <div v-if="isEditingPointReminder" class="confirmation-dialog">
+      <p>您仍在編輯狀態，請先確認修改或取消編輯。</p>
+      <button @click="cancelPointEdit">取消</button>
+      <button @click="confirmPointEdit">確認修改</button>
     </div>
   </div>
 </template>
@@ -229,8 +234,6 @@ export default {
       image: null,
       imageX: 0,
       imageY: 0,
-      dragOffsetX: 0,
-      dragOffsetY: 0,
       scale: 1,
       imageScale: 1,
       imageOffsetX: 0,
@@ -244,6 +247,7 @@ export default {
       deleteTarget: null,
       deleteType: '',
       showPopup: false,
+      isEditingPointReminder: false,
     };
   },
   mounted() {
@@ -251,8 +255,8 @@ export default {
     this.loadImage();
     this.defaultTagID = this.getNextTagID();
 
-    this.$refs.canvas.width = window.innerWidth * 0.8;  // 例如，設置為窗口寬度的80%
-    this.$refs.canvas.height = window.innerHeight * 0.8;  // 設置為窗口高度的80%
+    this.$refs.canvas.width = window.innerWidth * 0.8;
+    this.$refs.canvas.height = window.innerHeight * 0.8;
 
     window.addEventListener('resize', this.handleResize);
   },
@@ -280,6 +284,10 @@ export default {
       }
     },
     setCurrentMode(mode) {
+      if (this.isEditingPoint) {
+        this.isEditingPointReminder = true;
+        return;
+      }
       this.currentMode = mode;
       if (mode !== 'drawPath') {
         this.clearPathPreview();
@@ -287,15 +295,15 @@ export default {
       this.showPopup = false;
     },
     handleCanvasClick(event) {
-      const mouseX = Number(((event.offsetX - this.imageOffsetX) / this.imageScale).toFixed(1));
-      const mouseY = Number(((event.offsetY - this.imageOffsetY) / this.imageScale).toFixed(1));
+      const mouseX = Math.round((event.offsetX - this.imageOffsetX) / this.imageScale);
+      const mouseY = Math.round((event.offsetY - this.imageOffsetY) / this.imageScale);
 
       if (this.addingPoint) {
         this.clearCanvas();
         this.redrawPoints();
         this.redrawPaths();
       }
-
+     
       if (this.isEditingPoint && this.selectedPoint) {
         this.isDragging = true;
         this.dragPoint = this.selectedPoint;
@@ -326,15 +334,15 @@ export default {
       }
     
       this.points.push({
-        x: this.newPoint.x,
-        y: this.newPoint.y,
+        x: Math.round(this.newPoint.x),
+        y: Math.round(this.newPoint.y),
         tagID: this.newPoint.tagID,
         tagName: this.newPoint.tagName,
         floor: this.newPoint.floor,
         floorid: this.newPoint.floorid
       });
-
-      this.drawPoint(this.newPoint.x, this.newPoint.y);
+    
+      this.drawPoint(Math.round(this.newPoint.x), Math.round(this.newPoint.y));
       this.resetNewPoint();
     },
     cancelAddPoint() {
@@ -537,21 +545,31 @@ export default {
       this.clearCanvas();
       this.redrawPoints();
       this.redrawPaths();
+      this.isEditingPointReminder = false;
     },
-    cancelPointEdit(point) {
-      const index = this.points.findIndex(p => p.x === point.x && p.y === point.y);
-      if (index !== -1) {
-        this.points[index].x = this.originalPoint.x;
-        this.points[index].y = this.originalPoint.y;
-        this.points[index].tagID = this.originalPoint.tagID;
-        this.points[index].tagName = this.originalPoint.tagName;
+    cancelPointEdit() {
+      if (this.originalPoint) {
+        const index = this.points.findIndex(p => p.tagID === this.originalPoint.tagID);
+        if (index !== -1) {
+          this.points[index] = { ...this.originalPoint };
+          this.selectedPoint = { ...this.originalPoint };
+        }
       }
       this.isEditingPoint = false;
       this.originalPoint = {};
-
+      this.originalPath = {};
+    
       this.clearCanvas();
       this.redrawPoints();
       this.redrawPaths();
+      this.isEditingPointReminder = false;
+    },
+    checkEditingStatus() {
+      if (this.isEditingPoint) {
+        this.isEditingPointReminder = true;
+        return true;
+      }
+      return false;
     },
     enablePathEdit(path) {
       this.isEditingPath = true;
@@ -610,8 +628,8 @@ export default {
         this.redrawPoints();
         this.redrawPaths();
       } else if (this.isDragging && this.dragPoint && !this.isConfirmingPointEdit) {
-        const relativeX = Number(((mouseX - this.imageOffsetX) / this.imageScale).toFixed(1));
-        const relativeY = Number(((mouseY - this.imageOffsetY) / this.imageScale).toFixed(1));
+        const relativeX = Math.round((mouseX - this.imageOffsetX) / this.imageScale);
+        const relativeY = Math.round((mouseY - this.imageOffsetY) / this.imageScale);
 
         this.tempPoint = {
           x: relativeX,
@@ -632,8 +650,8 @@ export default {
         this.isDraggingImage = false;
       }
       if (this.isDragging && this.dragPoint) {
-        const mouseX = Number(((event.offsetX - this.imageOffsetX) / this.imageScale).toFixed(1));
-        const mouseY = Number(((event.offsetY - this.imageOffsetY) / this.imageScale).toFixed(1));
+        const mouseX = Math.round((event.offsetX - this.imageOffsetX) / this.imageScale);
+        const mouseY = Math.round((event.offsetY - this.imageOffsetY) / this.imageScale);
       
         this.tempPoint = {
           x: mouseX,
@@ -765,11 +783,9 @@ export default {
       const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
       saveAs(blob, "map_data.csv");
     },
-
     importCSV() {
       this.$refs.fileInput.click();
     },
-
     handleFileUpload(event) {
       const file = event.target.files[0];
       if (file) {
@@ -781,7 +797,6 @@ export default {
         reader.readAsText(file);
       }
     },
-
     parseCSV(content) {
       const lines = content.split('\n');
       const headers = lines[0].split(',');
@@ -916,6 +931,11 @@ export default {
   padding: 5px;
   border: 1px solid #ccc;
   border-radius: 4px;
+}
+
+.info-table input:disabled {
+  background-color: #f0f0f0;
+  color: #666;
 }
 
 body {

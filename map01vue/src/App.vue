@@ -1,10 +1,6 @@
 <template>
   <div id="app">
-    <h1>Vue Test</h1>
-    <router-link to="/">Map Page</router-link> .
-    <router-link to="/test">Maptest Page</router-link> .
-    <router-link to="/MapFunction">MapFunction</router-link>
-
+    <h1>地圖繪製介面</h1>
     <router-view/>
   </div>
 </template>
