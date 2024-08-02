@@ -33,27 +33,27 @@
           </tr>
           <tr>
             <td><label for="tag-id">Tag_ID</label></td>
-            <td><input type="text" id="tag-id" v-model="newPoint.tagID"></td>
+            <td><input type="text" id="tag-id" v-model="newPoint.tagID" @keydown.stop></td>
           </tr>
           <tr>
             <td><label for="tag-name">Tag_Name</label></td>
-            <td><input type="text" id="tag-name" v-model="newPoint.tagName"></td>
+            <td><input type="text" id="tag-name" v-model="newPoint.tagName" @keydown.stop></td>
           </tr>
           <tr>
             <td><label for="x-coordinate">X 座標</label></td>
-            <td><input type="number" id="x-coordinate" v-model.number="newPoint.x"></td>
+            <td><input type="number" id="x-coordinate" v-model.number="newPoint.x" @keydown.stop></td>
           </tr>
           <tr>
             <td><label for="y-coordinate">Y 座標</label></td>
-            <td><input type="number" id="y-coordinate" v-model.number="newPoint.y"></td>
+            <td><input type="number" id="y-coordinate" v-model.number="newPoint.y" @keydown.stop></td>
           </tr>
           <tr>
             <td><label for="floor">樓層</label></td>
-            <td><input type="text" id="floor" v-model="newPoint.floor"></td>
+            <td><input type="text" id="floor" v-model="newPoint.floor" @keydown.stop></td>
           </tr>
           <tr>
             <td><label for="floorid">樓層編號</label></td>
-            <td><input type="text" id="floorid" v-model="newPoint.floorid"></td>
+            <td><input type="text" id="floorid" v-model="newPoint.floorid" @keydown.stop></td>
           </tr>
           <tr>
             <td colspan="2">
@@ -87,7 +87,7 @@
           </tr>
           <tr>
             <td><label for="path-speed">路徑速度</label></td>
-            <td><input type="number" id="path-speed" v-model.number="newPath.speed" min="0" step="0.1"></td>
+            <td><input type="number" id="path-speed" v-model.number="newPath.speed" min="0" step="0" @keydown.stop></td>
           </tr>
           <tr>
             <td colspan="2">
@@ -106,23 +106,23 @@
             </tr>
             <tr>
               <td><strong>Tag_ID</strong></td>
-              <td><input type="text" v-model="selectedPoint.tagID" :disabled="!isEditingPoint"></td>
+              <td><input type="text" v-model="selectedPoint.tagID" :disabled="!isEditingPoint" @keydown.stop></td>
             </tr>
             <tr>
               <td><strong>X 座標</strong></td>
-              <td><input type="number" v-model.number="selectedPoint.x" :disabled="!isEditingPoint"></td>
+              <td><input type="number" v-model.number="selectedPoint.x" :disabled="!isEditingPoint" @keydown.stop></td>
             </tr>
             <tr>
               <td><strong>Y 座標</strong></td>
-              <td><input type="number" v-model.number="selectedPoint.y" :disabled="!isEditingPoint"></td>
+              <td><input type="number" v-model.number="selectedPoint.y" :disabled="!isEditingPoint" @keydown.stop></td>
             </tr>
             <tr>
               <td><strong>樓層</strong></td>
-              <td><input type="text" v-model="selectedPoint.floor" :disabled="!isEditingPoint"></td>
+              <td><input type="text" v-model="selectedPoint.floor" :disabled="!isEditingPoint" @keydown.stop></td>
             </tr>
             <tr>
               <td><strong>樓層編號</strong></td>
-              <td><input type="number" v-model="selectedPoint.floorid" :disabled="!isEditingPoint"></td>
+              <td><input type="number" v-model="selectedPoint.floorid" :disabled="!isEditingPoint" @keydown.stop></td>
             </tr>
             <tr>
               <td colspan="2">
@@ -158,7 +158,7 @@
                 </tr>
                 <tr>
                   <td><strong>路徑速度</strong></td>
-                  <td><input type="number" v-model.number="path.speed" :disabled="!isEditingPath"></td>
+                  <td><input type="number" v-model.number="path.speed" :disabled="!isEditingPath" @keydown.stop></td>
                 </tr>
                 <tr>
                   <td colspan="2">
@@ -248,6 +248,8 @@ export default {
       deleteType: '',
       showPopup: false,
       isEditingPointReminder: false,
+      pathStartPoint: null,
+      tempPath: null,
     };
   },
   mounted() {
@@ -259,6 +261,8 @@ export default {
     this.$refs.canvas.height = window.innerHeight * 0.8;
 
     window.addEventListener('resize', this.handleResize);
+    window.addEventListener('keydown', this.handleKeyPress);
+
   },
   methods: {
     loadImage() {
@@ -361,6 +365,7 @@ export default {
       this.newPoint.floorid = '';
       this.addingPoint = false;
       this.showPopup = false;
+      this.defaultTagID = (parseInt(this.defaultTagID) + 1).toString().padStart(4, '0');
     },
     drawPoint(x, y, color = 'blue') {
       const canvasX = this.imageOffsetX + x * this.imageScale;
@@ -385,72 +390,88 @@ export default {
     },
     addPathPoint(mouseX, mouseY) {
       let clickedPoint = null;
+      const clickThreshold = 10 / this.imageScale;
+
       for (const point of this.points) {
-        if (Math.abs(point.x - mouseX) <= 3 / this.imageScale && Math.abs(point.y - mouseY) <= 3 / this.imageScale) {
+        if (Math.abs(point.x - mouseX) <= clickThreshold && Math.abs(point.y - mouseY) <= clickThreshold) {
           clickedPoint = point;
           break;
         }
       }
+
       if (clickedPoint) {
-        this.pathPoints.push({ 
-          x: Number(clickedPoint.x.toFixed(1)), 
-          y: Number(clickedPoint.y.toFixed(1)), 
-          tagID: clickedPoint.tagID 
-        });
-        if (this.pathPoints.length === 2) {
-          const startPoint = this.pathPoints[0];
-          const endPoint = this.pathPoints[1];
-        
-          this.newPath.endX = endPoint.x;
-          this.newPath.endY = endPoint.y;
-        
-          this.drawDashedLine(startPoint.x, startPoint.y, endPoint.x, endPoint.y);
-          this.showPopup = true;
+        if (this.pathPoints.length === 0) {
+          this.pathStartPoint = clickedPoint;
+          this.drawPoint(clickedPoint.x, clickedPoint.y, 'red');
+          this.pathPoints.push(clickedPoint);
+        } else if (this.pathPoints.length === 1) {
+          if (clickedPoint.tagID !== this.pathStartPoint.tagID) {
+            this.pathPoints.push(clickedPoint);
+            this.tempPath = {
+              start: this.pathStartPoint,
+              end: clickedPoint
+            };
+            this.drawDashedLine(this.pathStartPoint.x, this.pathStartPoint.y, clickedPoint.x, clickedPoint.y);
+            this.showPopup = true;
+          } else {
+            this.clearPathPreview();
+            alert("起點與終點不能是同一個點，請重新繪製。");
+          }
         }
+
+        this.showFeedback(clickedPoint.x, clickedPoint.y, 'green');
+      } else {
+        this.showFeedback(mouseX, mouseY, 'red');
       }
     },
-    confirmAddPath() {
-      const startPoint = this.pathPoints[0];
-      const endPoint = this.pathPoints[1];
-      const path = {
-        start: startPoint,
-        end: endPoint,
-        speed: this.newPath.speed
-      };
-    
-      this.paths.push(path);
-    
-      this.clearPathPreview();
-      this.pathPoints = [];
-    
-      this.clearCanvas();
-      this.redrawPoints();
-      this.redrawPaths();
-      this.showPopup = false;
-      },
-      cancelAddPath() {
-      this.clearPathPreview();
-      this.pathPoints = [];
-      this.showPopup = false;
-      },
-      clearPathPreview() {
-      this.clearCanvas();
-      this.redrawPoints();
-      this.redrawPaths();
-      },
-      drawDashedLine(x1, y1, x2, y2) {
-      const canvasX1 = this.imageOffsetX + x1 * this.imageScale;
-      const canvasY1 = this.imageOffsetY + y1 * this.imageScale;
-      const canvasX2 = this.imageOffsetX + x2 * this.imageScale;
-      const canvasY2 = this.imageOffsetY + y2 * this.imageScale;
-      
+    showFeedback(x, y, color) {
+      const canvasX = this.imageOffsetX + x * this.imageScale;
+      const canvasY = this.imageOffsetY + y * this.imageScale;
+
       this.context.beginPath();
-      this.context.setLineDash([5, 5]);
-      this.context.moveTo(canvasX1, canvasY1);
-      this.context.lineTo(canvasX2, canvasY2);
-      this.context.strokeStyle = 'gray';
-      this.context.stroke();
-      this.context.setLineDash([]);
+      this.context.arc(canvasX, canvasY, 8, 0, Math.PI * 2);
+      this.context.fillStyle = color;
+      this.context.globalAlpha = 0.5;
+      this.context.fill();
+      this.context.globalAlpha = 1;
+
+      setTimeout(() => {
+        this.clearCanvas();
+        this.redrawPoints();
+        this.redrawPaths();
+        if (this.pathStartPoint) {
+          this.drawPoint(this.pathStartPoint.x, this.pathStartPoint.y, 'red');
+        }
+      }, 300);
+    },
+    clearPathPreview() {
+      this.pathStartPoint = null;
+      this.pathPoints = [];
+      this.tempPath = null;
+      this.clearCanvas();
+      this.redrawPoints();
+      this.redrawPaths();
+    },
+    confirmAddPath() {
+      if (this.tempPath) {
+        const path = {
+          start: this.tempPath.start,
+          end: this.tempPath.end,
+          speed: this.newPath.speed
+        };
+      
+        this.paths.push(path);
+      
+        this.clearPathPreview();
+        this.clearCanvas();
+        this.redrawPoints();
+        this.redrawPaths();
+        this.showPopup = false;
+      }
+    },
+    cancelAddPath() {
+      this.clearPathPreview();
+      this.showPopup = false;
     },
     showPointInfo(mouseX, mouseY) {
       for (const point of this.points) {
@@ -494,16 +515,40 @@ export default {
     },
     redrawPoints() {
       for (const point of this.points) {
-        this.drawPoint(point.x, point.y);
+        if (point && point.x !== undefined && point.y !== undefined) {
+          this.drawPoint(point.x, point.y);
+        }
       }
+    },
+    drawDashedLine(x1, y1, x2, y2) {
+      const canvasX1 = this.imageOffsetX + x1 * this.imageScale;
+      const canvasY1 = this.imageOffsetY + y1 * this.imageScale;
+      const canvasX2 = this.imageOffsetX + x2 * this.imageScale;
+      const canvasY2 = this.imageOffsetY + y2 * this.imageScale;
+      
+      this.context.beginPath();
+      this.context.setLineDash([5, 5]);
+      this.context.moveTo(canvasX1, canvasY1);
+      this.context.lineTo(canvasX2, canvasY2);
+      this.context.strokeStyle = 'gray';
+      this.context.stroke();
+      this.context.setLineDash([]);
     },
     redrawPaths() {
       this.context.beginPath();
       this.context.strokeStyle = 'black';
       this.context.lineWidth = 1;
-      
+        
       for (const path of this.paths) {
-        this.drawLine(path.start.x, path.start.y, path.end.x, path.end.y);
+        if (path.start && path.end && 
+            this.points.some(p => p.tagID === path.start.tagID) && 
+            this.points.some(p => p.tagID === path.end.tagID)) {
+          this.drawLine(path.start.x, path.start.y, path.end.x, path.end.y);
+        }
+      }
+    
+      if (this.tempPath) {
+        this.drawDashedLine(this.tempPath.start.x, this.tempPath.start.y, this.tempPath.end.x, this.tempPath.end.y);
       }
     },
     drawLine(x1, y1, x2, y2) {
@@ -525,45 +570,53 @@ export default {
       this.originalPoint = { ...point };
     },
     confirmPointEdit() {
-      const index = this.points.findIndex(p => p.x === this.selectedPoint.x && p.y === this.selectedPoint.y);
-      if (index !== -1) {
-        this.points[index] = { ...this.selectedPoint };
-      
-        for (const path of this.paths) {
-          if (path.start.x === this.originalPoint.x && path.start.y === this.originalPoint.y) {
-            path.start = { ...this.selectedPoint };
-          }
-          if (path.end.x === this.originalPoint.x && path.end.y === this.originalPoint.y) {
-            path.end = { ...this.selectedPoint };
-          }
-        }
-      }
-      this.isEditingPoint = false;
-      this.dragPoint = null;
-      this.originalPoint = {};
+  if (!this.selectedPoint.tagID || !this.selectedPoint.tagName || 
+      this.selectedPoint.x === undefined || this.selectedPoint.y === undefined || 
+      !this.selectedPoint.floor || !this.selectedPoint.floorid) {
+    alert('請填寫所有必填欄位！');
+    return;
+  }
 
-      this.clearCanvas();
-      this.redrawPoints();
-      this.redrawPaths();
-      this.isEditingPointReminder = false;
-    },
-    cancelPointEdit() {
-      if (this.originalPoint) {
-        const index = this.points.findIndex(p => p.tagID === this.originalPoint.tagID);
-        if (index !== -1) {
-          this.points[index] = { ...this.originalPoint };
-          this.selectedPoint = { ...this.originalPoint };
-        }
+  const index = this.points.findIndex(p => p.x === this.originalPoint.x && p.y === this.originalPoint.y);
+  if (index !== -1) {
+    this.points[index] = { ...this.selectedPoint };
+  
+    for (const path of this.paths) {
+      if (path.start.x === this.originalPoint.x && path.start.y === this.originalPoint.y) {
+        path.start = { ...this.selectedPoint };
       }
-      this.isEditingPoint = false;
-      this.originalPoint = {};
-      this.originalPath = {};
-    
-      this.clearCanvas();
-      this.redrawPoints();
-      this.redrawPaths();
-      this.isEditingPointReminder = false;
-    },
+      if (path.end.x === this.originalPoint.x && path.end.y === this.originalPoint.y) {
+        path.end = { ...this.selectedPoint };
+      }
+    }
+  }
+  this.isEditingPoint = false;
+  this.dragPoint = null;
+  this.originalPoint = {};
+
+  this.clearCanvas();
+  this.redrawPoints();
+  this.redrawPaths();
+  this.isEditingPointReminder = false;
+},
+    cancelPointEdit() {
+  if (this.originalPoint) {
+    const index = this.points.findIndex(p => p.tagID === this.originalPoint.tagID);
+    if (index !== -1) {
+      this.points[index] = { ...this.originalPoint };
+      this.selectedPoint = { ...this.originalPoint };
+    }
+  }
+  this.isEditingPoint = false;
+  this.isConfirmingPointEdit = false;
+  this.originalPoint = {};
+  this.originalPath = {};
+
+  this.clearCanvas();
+  this.redrawPoints();
+  this.redrawPaths();
+  this.isEditingPointReminder = false;
+},
     checkEditingStatus() {
       if (this.isEditingPoint) {
         this.isEditingPointReminder = true;
@@ -695,64 +748,73 @@ export default {
       this.redrawPaths();
     },
     confirmPointMove() {
-      if (this.tempPoint) {
-        const index = this.points.findIndex(p => p.tagID === this.dragPoint.tagID);
-        if (index !== -1) {
-          this.points[index] = { ...this.tempPoint };
-        
-          this.paths.forEach(path => {
-            if (path.start.tagID === this.dragPoint.tagID) {
-              path.start.x = this.tempPoint.x;
-              path.start.y = this.tempPoint.y;
-            }
-            if (path.end.tagID === this.dragPoint.tagID) {
-              path.end.x = this.tempPoint.x;
-              path.end.y = this.tempPoint.y;
-            }
-          });
+  if (this.tempPoint) {
+    const index = this.points.findIndex(p => p.tagID === this.dragPoint.tagID);
+    if (index !== -1) {
+      this.points[index] = { ...this.tempPoint };
+    
+      this.paths.forEach(path => {
+        if (path.start.tagID === this.dragPoint.tagID) {
+          path.start.x = this.tempPoint.x;
+          path.start.y = this.tempPoint.y;
         }
-      }
-      this.isConfirmingPointEdit = false;
-      this.isDragging = false;
-      this.dragPoint = null;
-      this.tempPoint = null;
+        if (path.end.tagID === this.dragPoint.tagID) {
+          path.end.x = this.tempPoint.x;
+          path.end.y = this.tempPoint.y;
+        }
+      });
+    }
+  }
+  this.isConfirmingPointEdit = false;
+  this.isEditingPoint = false;
+  this.isDragging = false;
+  this.dragPoint = null;
+  this.tempPoint = null;
+  this.clearCanvas();
+  this.drawImage();
+  this.redrawPoints();
+  this.redrawPaths();
+},
+
+cancelPointMove() {
+  this.isConfirmingPointEdit = false;
+  this.isEditingPoint = false;
+  this.isDragging = false;
+  this.dragPoint = null;
+  this.tempPoint = null;
+  this.clearCanvas();
+  this.drawImage();
+  this.redrawPoints();
+  this.redrawPaths();
+},
+
+confirmDelete() {
+  if (this.deleteType === 'point') {
+    const deletedPointTagID = this.deleteTarget.tagID;
+    this.points = this.points.filter(point => point.tagID !== deletedPointTagID);
+    this.paths = this.paths.filter(path => 
+      path.start.tagID !== deletedPointTagID && path.end.tagID !== deletedPointTagID
+    );
+    this.selectedPoint = null;
+  } else if (this.deleteType === 'path') {
+    this.paths = this.paths.filter(path => path !== this.deleteTarget);
+    this.selectedPath = null;
+  }
+
+  this.isConfirmingDelete = false;
+  this.isEditingPoint = false;
+  this.isConfirmingPointEdit = false;
+  this.deleteTarget = null;
+  this.deleteType = '';
+
+  this.redrawAll();
+  this.showPopup = false;
+},
+    redrawAll() {
       this.clearCanvas();
       this.drawImage();
       this.redrawPoints();
       this.redrawPaths();
-    },
-    cancelPointMove() {
-      this.isConfirmingPointEdit = false;
-      this.isDragging = false;
-      this.dragPoint = null;
-      this.tempPoint = null;
-      this.clearCanvas();
-      this.drawImage();
-      this.redrawPoints();
-      this.redrawPaths();
-    },
-    confirmDelete() {
-      if (this.deleteType === 'point') {
-        this.points = this.points.filter(point => point !== this.deleteTarget);
-        this.paths = this.paths.filter(path => 
-          !(path.start.x === this.deleteTarget.x && path.start.y === this.deleteTarget.y) &&
-          !(path.end.x === this.deleteTarget.x && path.end.y === this.deleteTarget.y)
-        );
-        this.selectedPoint = null;
-      } else if (this.deleteType === 'path') {
-        this.paths = this.paths.filter(path => path !== this.deleteTarget);
-        this.selectedPath = null;
-      }
-    
-      this.isConfirmingDelete = false;
-      this.deleteTarget = null;
-      this.deleteType = '';
-    
-      this.clearCanvas();
-      this.drawImage();
-      this.redrawPoints();
-      this.redrawPaths();
-      this.showPopup = false;
     },
     cancelDelete() {
       this.isConfirmingDelete = false;
@@ -769,17 +831,19 @@ export default {
     },
     beforeDestroy() {
       window.removeEventListener('resize', this.handleResize);
+      window.removeEventListener('keydown', this.handleKeyPress);
     },
     exportCSV() {
-      let csvContent = "Tag_ID,Tag_Name,PositionX,PositionY,PositionZ,Floor_ID,Floor_Name,Endpoint1,Endpoint2,speed\n";
-      
+      let csvContent = "Tag_ID,Tag_Name,PositionX,PositionY,PositionZ,Floor_ID,Floor_Name,Endpoint1,Endpoint2,speed1,speed2\n";
+        
       this.points.forEach(point => {
         const relatedPaths = this.getRelatedPaths(point);
         const endpoints = relatedPaths.map(path => path.end.tagID);
-        
-        csvContent += `${point.tagID},${point.tagName},${point.x},${point.y},0,${point.floorid},${point.floor},${endpoints[0] || ''},${endpoints[1] || ''},${relatedPaths[0]?.speed || ''}\n`;
+        const speeds = relatedPaths.map(path => path.speed);
+      
+        csvContent += `${point.tagID},${point.tagName},${point.x},${point.y},0,${point.floorid},${point.floor},${endpoints[0] || ''},${endpoints[1] || ''},${speeds[0] || ''},${speeds[1] || ''}\n`;
       });
-
+    
       const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
       saveAs(blob, "map_data.csv");
     },
@@ -804,9 +868,16 @@ export default {
       this.points = [];
       this.paths = [];
 
+      let maxTagID = 0;
+
       for (let i = 1; i < lines.length; i++) {
         const values = lines[i].split(',');
         if (values.length === headers.length) {
+          const tagID = parseInt(values[0]);
+          if (tagID > maxTagID) {
+            maxTagID = tagID;
+          }
+        
           const point = {
             tagID: values[0],
             tagName: values[1],
@@ -816,7 +887,7 @@ export default {
             floor: values[6]
           };
           this.points.push(point);
-
+        
           if (values[7]) {
             this.paths.push({
               start: point,
@@ -828,23 +899,52 @@ export default {
             this.paths.push({
               start: point,
               end: { tagID: values[8] },
-              speed: parseFloat(values[9])
+              speed: parseFloat(values[10])
             });
           }
         }
       }
+      this.defaultTagID = (maxTagID + 1).toString().padStart(4, '0');
+    
       this.paths.forEach(path => {
         const endPoint = this.points.find(p => p.tagID === path.end.tagID);
         if (endPoint) {
           path.end = { ...endPoint };
         }
       });
-
-      this.clearCanvas();
-      this.drawImage();
-      this.redrawPoints();
-      this.redrawPaths();
+      this.redrawAll();
+    },
+    handleKeyPress(event) {
+  if (event.key === 'Enter') {
+    if (this.addingPoint) {
+      this.confirmAddPoint();
+    } else if (this.currentMode === 'drawPath' && this.pathPoints.length === 2) {
+      this.confirmAddPath();
+    } else if (this.isEditingPoint && !this.isConfirmingPointEdit) {
+      this.confirmPointEdit();
+    } else if (this.isConfirmingPointEdit) {
+      this.confirmPointMove();
+    } else if (this.isEditingPath) {
+      this.confirmPathEdit();
+    } else if (this.isConfirmingDelete) {
+      this.confirmDelete();
     }
+  } else if (event.key === 'Escape') {
+    if (this.addingPoint) {
+      this.cancelAddPoint();
+    } else if (this.currentMode === 'drawPath' && this.pathPoints.length === 2) {
+      this.cancelAddPath();
+    } else if (this.isEditingPoint && !this.isConfirmingPointEdit) {
+      this.cancelPointEdit();
+    } else if (this.isConfirmingPointEdit) {
+      this.cancelPointMove();
+    } else if (this.isEditingPath) {
+      this.cancelPathEdit();
+    } else if (this.isConfirmingDelete) {
+      this.cancelDelete();
+    }
+  }
+},
   }
 };
 </script>
