@@ -292,36 +292,65 @@ export default {
         this.isEditingPointReminder = true;
         return;
       }
+      this.cleanupCurrentMode();
       this.currentMode = mode;
       if (mode !== 'drawPath') {
         this.clearPathPreview();
       }
       this.showPopup = false;
     },
-    handleCanvasClick(event) {
-      const mouseX = Math.round((event.offsetX - this.imageOffsetX) / this.imageScale);
-      const mouseY = Math.round((event.offsetY - this.imageOffsetY) / this.imageScale);
+    cleanupCurrentMode() {
+      this.selectedPoint = null;
+      this.selectedPath = null;
+      this.addingPoint = false;
+      this.isEditingPoint = false;
+      this.isEditingPath = false;
+      this.pathPoints = [];
+      this.tempPath = null;
+      this.isConfirmingPointEdit = false;
+      this.isConfirmingDelete = false;
+      this.showPopup = false;
+      this.isEditingPointReminder = false;
 
-      if (this.addingPoint) {
-        this.clearCanvas();
-        this.redrawPoints();
-        this.redrawPaths();
-      }
-     
-      if (this.isEditingPoint && this.selectedPoint) {
-        this.isDragging = true;
-        this.dragPoint = this.selectedPoint;
-      } else if (this.currentMode === 'drawPoint') {
-        this.addingPoint = true;
-        this.newPoint.x = mouseX;
-        this.newPoint.y = mouseY;
-        this.drawPoint(mouseX, mouseY, 'red');
-        this.showPopup = true;
-      } else if (this.currentMode === 'clickMode') {
-        this.showPointInfo(mouseX, mouseY);
-      } else if (this.currentMode === 'drawPath') {
-        this.addPathPoint(mouseX, mouseY);
-      }
+      this.clearCanvas();
+      this.redrawPoints();
+      this.redrawPaths();
+    },
+    handleCanvasClick(event) {
+  const mouseX = Math.round((event.offsetX - this.imageOffsetX) / this.imageScale);
+  const mouseY = Math.round((event.offsetY - this.imageOffsetY) / this.imageScale);
+
+  if (!this.isEditingPoint) {
+    this.cleanupPreviousState();
+  }
+  
+  if (this.addingPoint) {
+    this.clearCanvas();
+    this.redrawPoints();
+    this.redrawPaths();
+  }
+ 
+  if (this.isEditingPoint && this.selectedPoint) {
+    this.isDragging = true;
+    this.dragPoint = this.selectedPoint;
+  } else if (this.currentMode === 'drawPoint') {
+    this.addingPoint = true;
+    this.newPoint.x = mouseX;
+    this.newPoint.y = mouseY;
+    this.drawPoint(mouseX, mouseY, 'red');
+    this.showPopup = true;
+  } else if (this.currentMode === 'clickMode' && !this.isEditingPoint) {
+    this.showPointInfo(mouseX, mouseY);
+  } else if (this.currentMode === 'drawPath') {
+    this.addPathPoint(mouseX, mouseY);
+  }
+},
+    cleanupPreviousState() {
+      this.showPopup = false;
+      this.isEditingPoint = false;
+      this.isEditingPath = false;
+      this.isConfirmingPointEdit = false;
+      this.isConfirmingDelete = false;
     },
     getNextTagID() {
       if (this.points.length === 0) {
@@ -354,6 +383,7 @@ export default {
       this.clearCanvas();
       this.redrawPoints();
       this.redrawPaths();
+      this.showPopup = false;
     },
     resetNewPoint() {
       const nextTagID = this.getNextTagID();
@@ -496,7 +526,7 @@ export default {
     },
     getRelatedPaths(point) {
       return this.paths.filter(path => 
-        path.start.x === point.x && path.start.y === point.y
+        path.start.tagID === point.tagID || path.end.tagID === point.tagID
       );
     },
     deletePoint(pointToDelete) {
@@ -570,53 +600,59 @@ export default {
       this.originalPoint = { ...point };
     },
     confirmPointEdit() {
-  if (!this.selectedPoint.tagID || !this.selectedPoint.tagName || 
-      this.selectedPoint.x === undefined || this.selectedPoint.y === undefined || 
-      !this.selectedPoint.floor || !this.selectedPoint.floorid) {
-    alert('請填寫所有必填欄位！');
-    return;
-  }
-
-  const index = this.points.findIndex(p => p.x === this.originalPoint.x && p.y === this.originalPoint.y);
-  if (index !== -1) {
-    this.points[index] = { ...this.selectedPoint };
-  
-    for (const path of this.paths) {
-      if (path.start.x === this.originalPoint.x && path.start.y === this.originalPoint.y) {
-        path.start = { ...this.selectedPoint };
+      if (!this.selectedPoint.tagID || !this.selectedPoint.tagName || 
+          this.selectedPoint.x === undefined || this.selectedPoint.y === undefined || 
+          !this.selectedPoint.floor || !this.selectedPoint.floorid) {
+        alert('請填寫所有必填欄位！');
+        return;
       }
-      if (path.end.x === this.originalPoint.x && path.end.y === this.originalPoint.y) {
-        path.end = { ...this.selectedPoint };
+    
+      const index = this.points.findIndex(p => p.tagID === this.originalPoint.tagID);
+      if (index !== -1) {
+        this.points[index] = { ...this.selectedPoint };
+      
+        this.paths.forEach(path => {
+          if (path.start.tagID === this.originalPoint.tagID) {
+            path.start = { ...this.selectedPoint };
+          }
+          if (path.end.tagID === this.originalPoint.tagID) {
+            path.end = { ...this.selectedPoint };
+          }
+        });
       }
-    }
-  }
-  this.isEditingPoint = false;
-  this.dragPoint = null;
-  this.originalPoint = {};
-
-  this.clearCanvas();
-  this.redrawPoints();
-  this.redrawPaths();
-  this.isEditingPointReminder = false;
-},
+      this.isEditingPoint = false;
+      this.dragPoint = null;
+      this.originalPoint = {};
+    
+      this.clearCanvas();
+      this.redrawPoints();
+      this.redrawPaths();
+      this.isEditingPointReminder = false;
+      this.showPopup = true;
+    },
     cancelPointEdit() {
-  if (this.originalPoint) {
-    const index = this.points.findIndex(p => p.tagID === this.originalPoint.tagID);
-    if (index !== -1) {
-      this.points[index] = { ...this.originalPoint };
-      this.selectedPoint = { ...this.originalPoint };
-    }
-  }
-  this.isEditingPoint = false;
-  this.isConfirmingPointEdit = false;
-  this.originalPoint = {};
-  this.originalPath = {};
-
-  this.clearCanvas();
-  this.redrawPoints();
-  this.redrawPaths();
-  this.isEditingPointReminder = false;
-},
+      if (this.originalPoint) {
+        const index = this.points.findIndex(p => p.tagID === this.originalPoint.tagID);
+        if (index !== -1) {
+          this.points[index] = { ...this.originalPoint };
+          this.selectedPoint = { ...this.originalPoint };
+        }
+      }
+      this.isEditingPoint = false;
+      this.isConfirmingPointEdit = false;
+      this.originalPoint = {};
+      this.originalPath = {};
+    
+      this.clearCanvas();
+      this.redrawPoints();
+      this.redrawPaths();
+      this.isEditingPointReminder = false;
+      this.showPopup = false;
+    },
+    closePopup() {
+      this.showPopup = false;
+      this.cleanupCurrentMode();
+    },
     checkEditingStatus() {
       if (this.isEditingPoint) {
         this.isEditingPointReminder = true;
@@ -685,12 +721,15 @@ export default {
         const relativeY = Math.round((mouseY - this.imageOffsetY) / this.imageScale);
 
         this.tempPoint = {
+          ...this.dragPoint,
           x: relativeX,
-          y: relativeY,
-          tagID: this.dragPoint.tagID,
-          tagName: this.dragPoint.tagName
+          y: relativeY
         };
-      
+
+        if (this.selectedPoint) {
+          this.selectedPoint.x = relativeX;
+          this.selectedPoint.y = relativeY;
+        }
         this.clearCanvas();
         this.drawImage();
         this.redrawPoints();
@@ -748,68 +787,66 @@ export default {
       this.redrawPaths();
     },
     confirmPointMove() {
-  if (this.tempPoint) {
-    const index = this.points.findIndex(p => p.tagID === this.dragPoint.tagID);
-    if (index !== -1) {
-      this.points[index] = { ...this.tempPoint };
+      if (this.tempPoint) {
+        const index = this.points.findIndex(p => p.tagID === this.dragPoint.tagID);
+        if (index !== -1) {
+          this.points[index] = { ...this.tempPoint };
+          this.selectedPoint = { ...this.tempPoint };
+        
+          this.paths.forEach(path => {
+            if (path.start.tagID === this.dragPoint.tagID) {
+              path.start = { ...this.tempPoint };
+            }
+            if (path.end.tagID === this.dragPoint.tagID) {
+              path.end = { ...this.tempPoint };
+            }
+          });
+        }
+      }
+      this.isConfirmingPointEdit = false;
+      this.isEditingPoint = false;
+      this.isDragging = false;
+      this.dragPoint = null;
+      this.tempPoint = null;
+      this.clearCanvas();
+      this.drawImage();
+      this.redrawPoints();
+      this.redrawPaths();
+      this.showPopup = true;
+    },
+    cancelPointMove() {
+      this.isConfirmingPointEdit = false;
+      this.isEditingPoint = false;
+      this.isDragging = false;
+      this.dragPoint = null;
+      this.tempPoint = null;
+      this.clearCanvas();
+      this.drawImage();
+      this.redrawPoints();
+      this.redrawPaths();
+    },
+    confirmDelete() {
+      if (this.deleteType === 'point') {
+        const deletedPointTagID = this.deleteTarget.tagID;
+        this.points = this.points.filter(point => point.tagID !== deletedPointTagID);
+        this.paths = this.paths.filter(path => 
+          path.start.tagID !== deletedPointTagID && path.end.tagID !== deletedPointTagID
+        );
+        this.selectedPoint = null;
+      } else if (this.deleteType === 'path') {
+        this.paths = this.paths.filter(path => path !== this.deleteTarget);
+        this.selectedPath = null;
+      }
     
-      this.paths.forEach(path => {
-        if (path.start.tagID === this.dragPoint.tagID) {
-          path.start.x = this.tempPoint.x;
-          path.start.y = this.tempPoint.y;
-        }
-        if (path.end.tagID === this.dragPoint.tagID) {
-          path.end.x = this.tempPoint.x;
-          path.end.y = this.tempPoint.y;
-        }
-      });
-    }
-  }
-  this.isConfirmingPointEdit = false;
-  this.isEditingPoint = false;
-  this.isDragging = false;
-  this.dragPoint = null;
-  this.tempPoint = null;
-  this.clearCanvas();
-  this.drawImage();
-  this.redrawPoints();
-  this.redrawPaths();
-},
-
-cancelPointMove() {
-  this.isConfirmingPointEdit = false;
-  this.isEditingPoint = false;
-  this.isDragging = false;
-  this.dragPoint = null;
-  this.tempPoint = null;
-  this.clearCanvas();
-  this.drawImage();
-  this.redrawPoints();
-  this.redrawPaths();
-},
-
-confirmDelete() {
-  if (this.deleteType === 'point') {
-    const deletedPointTagID = this.deleteTarget.tagID;
-    this.points = this.points.filter(point => point.tagID !== deletedPointTagID);
-    this.paths = this.paths.filter(path => 
-      path.start.tagID !== deletedPointTagID && path.end.tagID !== deletedPointTagID
-    );
-    this.selectedPoint = null;
-  } else if (this.deleteType === 'path') {
-    this.paths = this.paths.filter(path => path !== this.deleteTarget);
-    this.selectedPath = null;
-  }
-
-  this.isConfirmingDelete = false;
-  this.isEditingPoint = false;
-  this.isConfirmingPointEdit = false;
-  this.deleteTarget = null;
-  this.deleteType = '';
-
-  this.redrawAll();
-  this.showPopup = false;
-},
+      this.isConfirmingDelete = false;
+      this.isEditingPoint = false;
+      this.isConfirmingPointEdit = false;
+      this.deleteTarget = null;
+      this.deleteType = '';
+    
+      this.redrawAll();
+      this.showPopup = false;
+    },
     redrawAll() {
       this.clearCanvas();
       this.drawImage();
@@ -834,7 +871,7 @@ confirmDelete() {
       window.removeEventListener('keydown', this.handleKeyPress);
     },
     exportCSV() {
-      let csvContent = "Tag_ID,Tag_Name,PositionX,PositionY,PositionZ,Floor_ID,Floor_Name,Endpoint1,Endpoint2,speed1,speed2\n";
+      let csvContent = "Tag_ID,Tag_Name,PositionX,PositionY,PositionZ,Floor_ID,Floor_Name,Endpoint1,Endpoint2,Speed1,Speed2\n";
         
       this.points.forEach(point => {
         const relatedPaths = this.getRelatedPaths(point);
@@ -915,36 +952,36 @@ confirmDelete() {
       this.redrawAll();
     },
     handleKeyPress(event) {
-  if (event.key === 'Enter') {
-    if (this.addingPoint) {
-      this.confirmAddPoint();
-    } else if (this.currentMode === 'drawPath' && this.pathPoints.length === 2) {
-      this.confirmAddPath();
-    } else if (this.isEditingPoint && !this.isConfirmingPointEdit) {
-      this.confirmPointEdit();
-    } else if (this.isConfirmingPointEdit) {
-      this.confirmPointMove();
-    } else if (this.isEditingPath) {
-      this.confirmPathEdit();
-    } else if (this.isConfirmingDelete) {
-      this.confirmDelete();
-    }
-  } else if (event.key === 'Escape') {
-    if (this.addingPoint) {
-      this.cancelAddPoint();
-    } else if (this.currentMode === 'drawPath' && this.pathPoints.length === 2) {
-      this.cancelAddPath();
-    } else if (this.isEditingPoint && !this.isConfirmingPointEdit) {
-      this.cancelPointEdit();
-    } else if (this.isConfirmingPointEdit) {
-      this.cancelPointMove();
-    } else if (this.isEditingPath) {
-      this.cancelPathEdit();
-    } else if (this.isConfirmingDelete) {
-      this.cancelDelete();
-    }
-  }
-},
+      if (event.key === 'Enter') {
+        if (this.addingPoint) {
+          this.confirmAddPoint();
+        } else if (this.currentMode === 'drawPath' && this.pathPoints.length === 2) {
+          this.confirmAddPath();
+        } else if (this.isEditingPoint && !this.isConfirmingPointEdit) {
+          this.confirmPointEdit();
+        } else if (this.isConfirmingPointEdit) {
+          this.confirmPointMove();
+        } else if (this.isEditingPath) {
+          this.confirmPathEdit();
+        } else if (this.isConfirmingDelete) {
+          this.confirmDelete();
+        }
+      } else if (event.key === 'Escape') {
+        if (this.addingPoint) {
+          this.cancelAddPoint();
+        } else if (this.currentMode === 'drawPath' && this.pathPoints.length === 2) {
+          this.cancelAddPath();
+        } else if (this.isEditingPoint && !this.isConfirmingPointEdit) {
+          this.cancelPointEdit();
+        } else if (this.isConfirmingPointEdit) {
+          this.cancelPointMove();
+        } else if (this.isEditingPath) {
+          this.cancelPathEdit();
+        } else if (this.isConfirmingDelete) {
+          this.cancelDelete();
+        }
+      }
+    },
   }
 };
 </script>
