@@ -12,16 +12,38 @@
         </canvas>
       </div>
 
-      <div class="export-import-buttons">
-        <button @click="exportCSV">匯出</button>
-        <button @click="importCSV">匯入</button>
-        <input type="file" ref="fileInput" style="display: none;" @change="handleFileUpload">
-      </div>
+      <div class="sidebar">
+        <div class="export-import-buttons">
+          <button @click="exportCSV">匯出</button>
+          <button @click="importCSV">匯入</button>
+          <input type="file" ref="fileInput" style="display: none;" @change="handleFileUpload">
+        </div>
+      
+        <div class="map-selection">
+          <label for="map-select">地圖：</label>
+          <select id="map-select" v-model="selectedMap" @change="changeMap">
+            <option value="1F">1F</option>
+            <option value="4F">4F</option>
+          </select>
+        </div>
+        
+        <div class="vehicle-import">
+          <label for="vehicle-select">車體：</label>
+          <select id="vehicle-select" v-model="selectedVehicle">
+            <option value="vehicle1">車體 1</option>
+            <option value="vehicle2">車體 2</option>
+            <option value="vehicle3">車體 3</option>
+          </select>
+          <button @click="importVehicle">導入</button>
+        </div>
 
-      <div class="mode-selection">
-        <button :class="{ active: currentMode === 'drawPoint' }" @click="setCurrentMode('drawPoint')">點</button>
-        <button :class="{ active: currentMode === 'drawPath' }" @click="setCurrentMode('drawPath')">路徑</button>
-        <button :class="{ active: currentMode === 'clickMode' }" @click="setCurrentMode('clickMode')">點選</button>
+      
+        <div class="mode-selection">
+          <button :class="{ active: currentMode === 'drawPoint' }" @click="setCurrentMode('drawPoint')">點</button>
+          <button :class="{ active: currentMode === 'drawPath' }" @click="setCurrentMode('drawPath')">路徑</button>
+          <button :class="{ active: currentMode === 'clickMode' }" @click="setCurrentMode('clickMode')">選點</button>
+          <button :class="{ active: currentMode === 'selectPath' }" @click="setCurrentMode('selectPath')">選線</button>
+        </div>
       </div>
     </div>
 
@@ -173,6 +195,42 @@
           </ul>
         </div>
       </div>
+
+      <div v-if="selectedPath">
+        <table class="info-table">
+          <tr>
+            <td colspan="2">路徑資訊</td>
+          </tr>
+          <tr>
+            <td><strong>起點 Tag_ID</strong></td>
+            <td>{{ selectedPath.start.tagID }}</td>
+          </tr>
+          <tr>
+            <td><strong>終點 Tag_ID</strong></td>
+            <td>{{ selectedPath.end.tagID }}</td>
+          </tr>
+          <tr>
+            <td><strong>起點坐標</strong></td>
+            <td>({{ selectedPath.start.x }}, {{ selectedPath.start.y }})</td>
+          </tr>
+          <tr>
+            <td><strong>終點坐標</strong></td>
+            <td>({{ selectedPath.end.x }}, {{ selectedPath.end.y }})</td>
+          </tr>
+          <tr>
+            <td><strong>路徑速度</strong></td>
+            <td><input type="number" v-model.number="selectedPath.speed" :disabled="!isEditingPath" @keydown.stop></td>
+          </tr>
+          <tr>
+            <td colspan="2">
+              <button class="table-btn btn btn-cancel" @click="cancelPathEdit" v-if="isEditingPath">取消修改</button>
+              <button class="table-btn btn btn-update" @click="confirmPathEdit" v-if="isEditingPath">確認修改</button>
+              <button class="table-btn btn btn-update" @click="enablePathEdit" v-if="!isEditingPath">修改路徑</button>
+              <button class="table-btn btn btn-delete" @click="deletePath(selectedPath)">刪除路徑</button>
+            </td>
+          </tr>
+        </table>
+      </div>
     </div>
 
     <div v-if="isConfirmingDelete" class="confirmation-dialog">
@@ -202,7 +260,7 @@ export default {
   data() {
     return {
       context: null,
-      currentMode: 'drawPoint',
+      currentMode: 'clickMode',
       points: [],
       selectedPoint: null,
       addingPoint: false,
@@ -250,6 +308,12 @@ export default {
       isEditingPointReminder: false,
       pathStartPoint: null,
       tempPath: null,
+      selectedMap: '1F',
+      selectedVehicle: 'vehicle1',
+      mapImages: {
+        '1F': require('@/assets/MAP1F1.png'),
+        '4F': require('@/assets/MAP4F1.png')
+      },
     };
   },
   mounted() {
@@ -265,6 +329,19 @@ export default {
 
   },
   methods: {
+    changeMap() {
+      this.image.src = this.mapImages[this.selectedMap];
+      this.image.onload = () => {
+        this.clearCanvas();
+        this.drawImage();
+        this.points = [];
+        this.paths = [];
+      };
+    },
+
+    importVehicle() {
+      console.log(`導入車體: ${this.selectedVehicle}`);
+    },
     loadImage() {
       this.image = new Image();
       this.image.src = mapImage;
@@ -339,12 +416,118 @@ export default {
     this.newPoint.y = mouseY;
     this.drawPoint(mouseX, mouseY, 'red');
     this.showPopup = true;
-  } else if (this.currentMode === 'clickMode' && !this.isEditingPoint) {
-    this.showPointInfo(mouseX, mouseY);
+  } else if (this.currentMode === 'clickMode') {
+    this.selectNearestPoint(mouseX, mouseY);
   } else if (this.currentMode === 'drawPath') {
     this.addPathPoint(mouseX, mouseY);
+  } else if (this.currentMode === 'selectPath') {
+    this.selectNearestPath(mouseX, mouseY);
   }
 },
+selectNearestPoint(mouseX, mouseY) {
+  let nearestPoint = null;
+  let minDistance = Infinity;
+  const baseClickThreshold = 10;
+  const clickThreshold = Math.min(baseClickThreshold / this.imageScale, 5);
+
+  for (const point of this.points) {
+    const distance = Math.sqrt(Math.pow(point.x - mouseX, 2) + Math.pow(point.y - mouseY, 2));
+    if (distance < minDistance && distance <= clickThreshold) {
+      minDistance = distance;
+      nearestPoint = point;
+    }
+  }
+
+  if (nearestPoint) {
+    this.selectedPoint = nearestPoint;
+    this.selectedPath = null;
+    this.showPopup = true;
+    this.clearCanvas();
+    this.redrawPoints();
+    this.redrawPaths();
+    this.drawPoint(nearestPoint.x, nearestPoint.y, 'green');
+  } else {
+    this.selectedPoint = null;
+    this.selectedPath = null;
+    this.showPopup = false;
+  }
+},
+selectNearestPath(mouseX, mouseY) {
+  let nearestPath = null;
+  let minDistance = Infinity;
+  const baseClickThreshold = 8;
+  const clickThreshold = Math.min(baseClickThreshold / this.imageScale, 3);
+
+  for (const path of this.paths) {
+    const distance = this.distanceToPath(mouseX, mouseY, path);
+    if (distance < minDistance && distance <= clickThreshold) {
+      minDistance = distance;
+      nearestPath = path;
+    }
+  }
+
+  if (nearestPath) {
+    this.selectedPath = nearestPath;
+    this.selectedPoint = null;
+    this.showPopup = true;
+    this.clearCanvas();
+    this.redrawPoints();
+    this.redrawPaths();
+    this.highlightPath(nearestPath);
+  } else {
+    this.selectedPath = null;
+    this.selectedPoint = null;
+    this.showPopup = false;
+  }
+},
+highlightPath(path) {
+  const startX = this.imageOffsetX + path.start.x * this.imageScale;
+  const startY = this.imageOffsetY + path.start.y * this.imageScale;
+  const endX = this.imageOffsetX + path.end.x * this.imageScale;
+  const endY = this.imageOffsetY + path.end.y * this.imageScale;
+
+  this.context.beginPath();
+  this.context.moveTo(startX, startY);
+  this.context.lineTo(endX, endY);
+  this.context.strokeStyle = 'red';
+  this.context.lineWidth = 3;
+  this.context.stroke();
+},
+distanceToPath(x, y, path) {
+  const x1 = path.start.x;
+  const y1 = path.start.y;
+  const x2 = path.end.x;
+  const y2 = path.end.y;
+
+  const A = x - x1;
+  const B = y - y1;
+  const C = x2 - x1;
+  const D = y2 - y1;
+
+  const dot = A * C + B * D;
+  const len_sq = C * C + D * D;
+  let param = -1;
+  if (len_sq != 0) param = dot / len_sq;
+
+  let xx, yy;
+
+  if (param < 0) {
+    xx = x1;
+    yy = y1;
+  } else if (param > 1) {
+    xx = x2;
+    yy = y2;
+  } else {
+    xx = x1 + param * C;
+    yy = y1 + param * D;
+  }
+
+  const dx = x - xx;
+  const dy = y - yy;
+  return Math.sqrt(dx * dx + dy * dy);
+},
+
+
     cleanupPreviousState() {
       this.showPopup = false;
       this.isEditingPoint = false;
@@ -989,8 +1172,7 @@ export default {
 <style scoped>
 .container {
   display: flex;
-  justify-content: center;
-  align-items: center;
+  justify-content: space-between;
   max-width: 100%;
   height: 80vh;
   margin: 0 auto;
@@ -998,9 +1180,47 @@ export default {
 }
 
 .main-content {
+  flex: 1;
   display: flex;
   flex-direction: column;
   align-items: center;
+}
+
+.sidebar {
+  width: 100px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  position: fixed;
+  top: 260px;
+  right: 40px;
+}
+
+.export-import-buttons,
+.map-selection,
+.vehicle-import,
+.mode-selection {
+  background-color: #ffffff;
+  padding: 10px;
+  border-radius: 8px;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.export-import-buttons button,
+.vehicle-import button,
+.mode-selection button {
+  width: 100%;
+  margin: 5px 0;
+  font-size: 16px;
+  padding: 10px;
+}
+
+select {
+  display: block;
+  width: 100%;
+  margin: 5px 0;
+  padding: 5px;
+  font-size: 16px;
 }
 
 .canvas-container {
