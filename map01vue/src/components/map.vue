@@ -30,11 +30,11 @@
         <div class="vehicle-import">
           <label for="vehicle-select">車體：</label>
           <select id="vehicle-select" v-model="selectedVehicle">
-            <option value="vehicle1">車體 1</option>
-            <option value="vehicle2">車體 2</option>
+            <option value="vehicle1">影像車</option>
+            <option value="vehicle2">環境量測</option>
             <option value="vehicle3">車體 3</option>
           </select>
-          <button @click="importVehicle">導入</button>
+          <button @click="importVehicle">讀取</button>
         </div>
 
       
@@ -265,6 +265,8 @@ export default {
       selectedPoint: null,
       addingPoint: false,
       defaultTagID: '',
+      floor:'1F',
+      floorid: 2,
       newPoint: {
         x: 0,
         y: 0,
@@ -314,6 +316,8 @@ export default {
         '1F': require('@/assets/MAP1F1.png'),
         '4F': require('@/assets/MAP4F1.png')
       },
+      hoveredPath: null,
+      hoveredPoint: null,
     };
   },
   mounted() {
@@ -331,6 +335,13 @@ export default {
   methods: {
     changeMap() {
       this.image.src = this.mapImages[this.selectedMap];
+      if(this.selectedMap === '1F'){
+        this.floor = '1F';
+        this.floorid = 2;
+      } else if(this.selectedMap === '4F'){
+        this.floor = '4F';
+        this.floorid = 5;
+      }
       this.image.onload = () => {
         this.clearCanvas();
         this.drawImage();
@@ -338,7 +349,6 @@ export default {
         this.paths = [];
       };
     },
-
     importVehicle() {
       console.log(`導入車體: ${this.selectedVehicle}`);
     },
@@ -452,82 +462,80 @@ selectNearestPoint(mouseX, mouseY) {
     this.showPopup = false;
   }
 },
-selectNearestPath(mouseX, mouseY) {
-  let nearestPath = null;
-  let minDistance = Infinity;
-  const baseClickThreshold = 8;
-  const clickThreshold = Math.min(baseClickThreshold / this.imageScale, 3);
+  selectNearestPath(mouseX, mouseY) {
+    let nearestPath = null;
+    let minDistance = Infinity;
+    const baseClickThreshold = 8;
+    const clickThreshold = Math.min(baseClickThreshold / this.imageScale, 3);
 
-  for (const path of this.paths) {
-    const distance = this.distanceToPath(mouseX, mouseY, path);
-    if (distance < minDistance && distance <= clickThreshold) {
-      minDistance = distance;
-      nearestPath = path;
+    for (const path of this.paths) {
+      const distance = this.distanceToPath(mouseX, mouseY, path);
+      if (distance < minDistance && distance <= clickThreshold) {
+        minDistance = distance;
+        nearestPath = path;
+      }
     }
-  }
 
-  if (nearestPath) {
-    this.selectedPath = nearestPath;
-    this.selectedPoint = null;
-    this.showPopup = true;
-    this.clearCanvas();
-    this.redrawPoints();
-    this.redrawPaths();
-    this.highlightPath(nearestPath);
-  } else {
-    this.selectedPath = null;
-    this.selectedPoint = null;
-    this.showPopup = false;
-  }
-},
-highlightPath(path) {
-  const startX = this.imageOffsetX + path.start.x * this.imageScale;
-  const startY = this.imageOffsetY + path.start.y * this.imageScale;
-  const endX = this.imageOffsetX + path.end.x * this.imageScale;
-  const endY = this.imageOffsetY + path.end.y * this.imageScale;
+    if (nearestPath) {
+      this.selectedPath = nearestPath;
+      this.selectedPoint = null;
+      this.showPopup = true;
+      this.clearCanvas();
+      this.redrawPoints();
+      this.redrawPaths();
+      this.highlightPath(nearestPath);
+    } else {
+      this.selectedPath = null;
+      this.selectedPoint = null;
+      this.showPopup = false;
+    }
+  },
+  highlightPath(path, color = 'red', lineWidth = 3) {
+    const startX = this.imageOffsetX + path.start.x * this.imageScale;
+    const startY = this.imageOffsetY + path.start.y * this.imageScale;
+    const endX = this.imageOffsetX + path.end.x * this.imageScale;
+    const endY = this.imageOffsetY + path.end.y * this.imageScale;
 
-  this.context.beginPath();
-  this.context.moveTo(startX, startY);
-  this.context.lineTo(endX, endY);
-  this.context.strokeStyle = 'red';
-  this.context.lineWidth = 3;
-  this.context.stroke();
-},
-distanceToPath(x, y, path) {
-  const x1 = path.start.x;
-  const y1 = path.start.y;
-  const x2 = path.end.x;
-  const y2 = path.end.y;
+    this.context.beginPath();
+    this.context.moveTo(startX, startY);
+    this.context.lineTo(endX, endY);
+    this.context.strokeStyle = color;
+    this.context.lineWidth = lineWidth;
+    this.context.stroke();
+  },
+  distanceToPath(x, y, path) {
+    const x1 = path.start.x;
+    const y1 = path.start.y;
+    const x2 = path.end.x;
+    const y2 = path.end.y;
 
-  const A = x - x1;
-  const B = y - y1;
-  const C = x2 - x1;
-  const D = y2 - y1;
+    const A = x - x1;
+    const B = y - y1;
+    const C = x2 - x1;
+    const D = y2 - y1;
 
-  const dot = A * C + B * D;
-  const len_sq = C * C + D * D;
-  let param = -1;
-  if (len_sq != 0) param = dot / len_sq;
+    const dot = A * C + B * D;
+    const len_sq = C * C + D * D;
+    let param = -1;
+    if (len_sq != 0) param = dot / len_sq;
 
-  let xx, yy;
+    let xx, yy;
 
-  if (param < 0) {
-    xx = x1;
-    yy = y1;
-  } else if (param > 1) {
-    xx = x2;
-    yy = y2;
-  } else {
-    xx = x1 + param * C;
-    yy = y1 + param * D;
-  }
+    if (param < 0) {
+      xx = x1;
+      yy = y1;
+    } else if (param > 1) {
+      xx = x2;
+      yy = y2;
+    } else {
+      xx = x1 + param * C;
+      yy = y1 + param * D;
+    }
 
-  const dx = x - xx;
-  const dy = y - yy;
-  return Math.sqrt(dx * dx + dy * dy);
-},
-
-
+    const dx = x - xx;
+    const dy = y - yy;
+    return Math.sqrt(dx * dx + dy * dy);
+  },
     cleanupPreviousState() {
       this.showPopup = false;
       this.isEditingPoint = false;
@@ -590,6 +598,14 @@ distanceToPath(x, y, path) {
       this.context.strokeStyle = 'white';
       this.context.lineWidth = 2;
       this.context.stroke();
+
+      if (this.hoveredPoint && this.hoveredPoint.x === x && this.hoveredPoint.y === y) {
+        this.context.beginPath();
+        this.context.arc(canvasX, canvasY, 10, 0, Math.PI * 2);
+        this.context.strokeStyle = 'yellow';
+        this.context.lineWidth = 3;
+        this.context.stroke();
+      }
 
       const tagID = this.points.find(point => point.x === x && point.y === y)?.tagID;
       if (tagID) {
@@ -748,22 +764,26 @@ distanceToPath(x, y, path) {
       this.context.setLineDash([]);
     },
     redrawPaths() {
-      this.context.beginPath();
-      this.context.strokeStyle = 'black';
-      this.context.lineWidth = 1;
-        
-      for (const path of this.paths) {
-        if (path.start && path.end && 
-            this.points.some(p => p.tagID === path.start.tagID) && 
-            this.points.some(p => p.tagID === path.end.tagID)) {
-          this.drawLine(path.start.x, path.start.y, path.end.x, path.end.y);
-        }
+    this.context.beginPath();
+    this.context.strokeStyle = 'black';
+    this.context.lineWidth = 1;
+      
+    for (const path of this.paths) {
+      if (path.start && path.end && 
+          this.points.some(p => p.tagID === path.start.tagID) && 
+          this.points.some(p => p.tagID === path.end.tagID)) {
+        this.drawLine(path.start.x, path.start.y, path.end.x, path.end.y);
       }
-    
-      if (this.tempPath) {
-        this.drawDashedLine(this.tempPath.start.x, this.tempPath.start.y, this.tempPath.end.x, this.tempPath.end.y);
-      }
-    },
+    }
+  
+    if (this.tempPath) {
+      this.drawDashedLine(this.tempPath.start.x, this.tempPath.start.y, this.tempPath.end.x, this.tempPath.end.y);
+    }
+
+    if (this.hoveredPath) {
+      this.highlightPath(this.hoveredPath, 'red', 2);
+    }
+  },
     drawLine(x1, y1, x2, y2) {
       const canvasX1 = this.imageOffsetX + x1 * this.imageScale;
       const canvasY1 = this.imageOffsetY + y1 * this.imageScale;
@@ -875,78 +895,110 @@ distanceToPath(x, y, path) {
       this.redrawPaths();
     },
     handleImageMouseDown(event) {
-      if (this.currentMode !== 'clickMode') return;
-      
-      this.isDraggingImage = true;
-      this.lastMouseX = event.offsetX;
-      this.lastMouseY = event.offsetY;
-    },
+  if (this.currentMode !== 'clickMode' && this.currentMode !== 'selectPath') return;
+  
+  this.isDraggingImage = true;
+  this.lastMouseX = event.offsetX;
+  this.lastMouseY = event.offsetY;
+},
     handleMouseMove(event) {
-      const mouseX = event.offsetX;
-      const mouseY = event.offsetY;
-      
-      if (this.isDraggingImage) {
-        const dx = mouseX - this.lastMouseX;
-        const dy = mouseY - this.lastMouseY;
-      
-        this.imageOffsetX += dx;
-        this.imageOffsetY += dy;
-      
-        this.lastMouseX = mouseX;
-        this.lastMouseY = mouseY;
-      
-        this.clearCanvas();
-        this.drawImage();
-        this.redrawPoints();
-        this.redrawPaths();
-      } else if (this.isDragging && this.dragPoint && !this.isConfirmingPointEdit) {
-        const relativeX = Math.round((mouseX - this.imageOffsetX) / this.imageScale);
-        const relativeY = Math.round((mouseY - this.imageOffsetY) / this.imageScale);
+  const mouseX = event.offsetX;
+  const mouseY = event.offsetY;
+  
+  if (this.isDraggingImage && !this.selectedPath) {
+    const dx = mouseX - this.lastMouseX;
+    const dy = mouseY - this.lastMouseY;
+  
+    this.imageOffsetX += dx;
+    this.imageOffsetY += dy;
+  
+    this.lastMouseX = mouseX;
+    this.lastMouseY = mouseY;
+  
+    this.redrawAll();
+  } else if (this.isDragging && this.dragPoint && !this.isConfirmingPointEdit) {
+    const relativeX = Math.round((mouseX - this.imageOffsetX) / this.imageScale);
+    const relativeY = Math.round((mouseY - this.imageOffsetY) / this.imageScale);
 
-        this.tempPoint = {
-          ...this.dragPoint,
-          x: relativeX,
-          y: relativeY
-        };
+    this.tempPoint = {
+      ...this.dragPoint,
+      x: relativeX,
+      y: relativeY
+    };
 
-        if (this.selectedPoint) {
-          this.selectedPoint.x = relativeX;
-          this.selectedPoint.y = relativeY;
-        }
-        this.clearCanvas();
-        this.drawImage();
-        this.redrawPoints();
-        this.redrawPaths();
-        this.drawPoint(relativeX, relativeY, 'green');
+    if (this.selectedPoint) {
+      this.selectedPoint.x = relativeX;
+      this.selectedPoint.y = relativeY;
+    }
+    this.redrawAll();
+    this.drawPoint(relativeX, relativeY, 'green');
+  }
+
+  const relativeX = Math.round((mouseX - this.imageOffsetX) / this.imageScale);
+  const relativeY = Math.round((mouseY - this.imageOffsetY) / this.imageScale);
+
+  if (this.currentMode === 'selectPath') {
+    let nearestPath = null;
+    let minDistance = Infinity;
+    const hoverThreshold = 10 / this.imageScale;
+
+    for (const path of this.paths) {
+      const distance = this.distanceToPath(relativeX, relativeY, path);
+      if (distance < minDistance && distance <= hoverThreshold) {
+        minDistance = distance;
+        nearestPath = path;
       }
-    },
-    handleMouseUp(event) {
-      if (this.isDraggingImage) {
-        this.isDraggingImage = false;
+    }
+
+    if (nearestPath !== this.hoveredPath) {
+      this.hoveredPath = nearestPath;
+      this.redrawAll();
+      if (this.hoveredPath) {
+        this.highlightPath(this.hoveredPath, 'red', 2);
       }
-      if (this.isDragging && this.dragPoint) {
-        const mouseX = Math.round((event.offsetX - this.imageOffsetX) / this.imageScale);
-        const mouseY = Math.round((event.offsetY - this.imageOffsetY) / this.imageScale);
-      
-        this.tempPoint = {
-          x: mouseX,
-          y: mouseY,
-          tagID: this.dragPoint.tagID,
-          tagName: this.dragPoint.tagName,
-          floor: this.dragPoint.floor,
-          floorid: this.dragPoint.floorid
-        };
-      
-        this.isDragging = false;
-        this.isConfirmingPointEdit = true;
-      
-        this.clearCanvas();
-        this.drawImage();
-        this.redrawPoints();
-        this.redrawPaths();
-        this.drawPoint(mouseX, mouseY, 'green');
+    }
+  } else if (this.currentMode === 'clickMode') {
+    let hoveredPoint = null;
+    const hoverThreshold = 10 / this.imageScale;
+
+    for (const point of this.points) {
+      const distance = Math.sqrt(Math.pow(point.x - relativeX, 2) + Math.pow(point.y - relativeY, 2));
+      if (distance <= hoverThreshold) {
+        hoveredPoint = point;
+        break;
       }
-    },
+    }
+
+    if (hoveredPoint !== this.hoveredPoint) {
+      this.hoveredPoint = hoveredPoint;
+      this.redrawAll();
+    }
+  }
+},
+handleMouseUp(event) {
+  if (this.isDraggingImage) {
+    this.isDraggingImage = false;
+  }
+  if (this.isDragging && this.dragPoint) {
+    const mouseX = Math.round((event.offsetX - this.imageOffsetX) / this.imageScale);
+    const mouseY = Math.round((event.offsetY - this.imageOffsetY) / this.imageScale);
+  
+    this.tempPoint = {
+      x: mouseX,
+      y: mouseY,
+      tagID: this.dragPoint.tagID,
+      tagName: this.dragPoint.tagName,
+      floor: this.dragPoint.floor,
+      floorid: this.dragPoint.floorid
+    };
+  
+    this.isDragging = false;
+    this.isConfirmingPointEdit = true;
+  
+    this.redrawAll();
+    this.drawPoint(mouseX, mouseY, 'green');
+  }
+},
     handleWheel(event) {
       event.preventDefault();
       const zoomIntensity = 0.1;
